@@ -150,7 +150,7 @@ public class ScheduleExecutor
             // here uses limit=1 because selecting multiple rows with FOR UPDATE
             // has risk of too often deadlock.
             return sm.lockReadySchedules(now, 1, (store, storedSchedule) -> {
-                runSchedule(new ScheduleControl(store, storedSchedule));
+                runSchedule(new ScheduleControl(store, storedSchedule), now);
             });
         });
         return count > 0;
@@ -178,7 +178,7 @@ public class ScheduleExecutor
         }
     }
 
-    private void runSchedule(ScheduleControl lockedSched)
+    private void runSchedule(ScheduleControl lockedSched, Instant now)
     {
         StoredSchedule sched = lockedSched.get();
 
@@ -199,8 +199,13 @@ public class ScheduleExecutor
 
             Config scheduleConfig = SchedulerManager.getScheduleConfig(def);
             boolean skipOnOvertime = scheduleConfig.get("skip_on_overtime", boolean.class, false);
+            boolean disableBackfill = scheduleConfig.get("disable_backfill", boolean.class, false);
 
-            if (!activeAttempts.isEmpty() && skipOnOvertime) {
+            if (disableBackfill && now.isAfter(sched.getNextRunTime())) {
+                logger.info("Now={} is later than scheduled time={}. Skipping this schedule: {}", now, sched.getNextScheduleTime(), sched);
+                nextSchedule = sr.nextScheduleTime(sched.getNextScheduleTime());
+            }
+            else if (!activeAttempts.isEmpty() && skipOnOvertime) {
                 logger.info("An attempt of the scheduled workflow is still running and skip_on_overtime = true. Skipping this schedule: {}", sched);
                 nextSchedule = sr.nextScheduleTime(sched.getNextScheduleTime());
             }

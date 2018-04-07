@@ -163,4 +163,50 @@ public class ScheduleExecutorTest
         // Verify that the schedule progressed to the next time
         verify(scs).updateNextScheduleTimeAndLastSessionTime(SCHEDULE_ID, nextScheduleTime, now);
     }
+
+    @Test
+    public void testDisableBackfill()
+            throws Exception
+    {
+        // set backfill_limit to 30 seconds
+        workflowConfig.getNestedOrSetEmpty("schedule")
+                .set("disable_backfill", true)
+                .set("daily>", "12:00:00");
+
+        // Indicate that there is no active attempt for this workflow
+        when(sessionStore.getActiveAttemptsOfWorkflow(eq(PROJECT_ID), eq(WORKFLOW_NAME), anyInt(), any(Optional.class)))
+                .thenReturn(ImmutableList.of());
+
+        // Run the schedule executor...
+        scheduleExecutor.runScheduleOnce(now.plusSeconds(1));
+
+        // Verify that another attempt was not started
+        verify(scheduleExecutor, never()).startSchedule(any(StoredSchedule.class), any(Scheduler.class), any(StoredWorkflowDefinitionWithProject.class));
+
+        // Verify that the schedule skipped to the next time
+        verify(scs).updateNextScheduleTime(SCHEDULE_ID, nextScheduleTime);
+    }
+
+    @Test
+    public void testDefaultBackfill()
+            throws Exception
+    {
+        // set backfill_limit to 30 seconds
+        workflowConfig.getNestedOrSetEmpty("schedule")
+                .set("daily>", "12:00:00");
+
+        // Indicate that there is no active attempt for this workflow
+        when(sessionStore.getActiveAttemptsOfWorkflow(eq(PROJECT_ID), eq(WORKFLOW_NAME), anyInt(), any(Optional.class)))
+                .thenReturn(ImmutableList.of());
+
+        // Run the schedule executor...
+        scheduleExecutor.runScheduleOnce(now.plusSeconds(1));
+
+        // Verify that another attempt was not started
+        verify(scheduleExecutor).startSchedule(any(StoredSchedule.class), any(Scheduler.class), any(StoredWorkflowDefinitionWithProject.class));
+
+        // Verify that the schedule progressed to the next time
+        verify(scs).updateNextScheduleTimeAndLastSessionTime(SCHEDULE_ID, nextScheduleTime, now);
+    }
+
 }
